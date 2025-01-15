@@ -19,60 +19,53 @@ const ACTIVITIES_COLLECTION = 'activities';
 export const createActivity = async (
   userId: string,
   title: string,
-  category: ActivityCategory
+  category: ActivityCategory,
+  isPomodoro: boolean = false
 ): Promise<string> => {
-  const activity = {
+  const activityRef = await addDoc(collection(db, 'activities'), {
     userId,
     title,
     category,
-    startTime: Timestamp.now(),
-    createdAt: Timestamp.now(),
-    updatedAt: Timestamp.now()
-  };
-
-  const docRef = await addDoc(collection(db, ACTIVITIES_COLLECTION), activity);
-  return docRef.id;
+    startTime: new Date(),
+    isPomodoro,
+    pomodoroCount: isPomodoro ? 0 : undefined,
+  });
+  return activityRef.id;
 };
 
 export const stopActivity = async (activityId: string): Promise<void> => {
-  const activityRef = doc(db, ACTIVITIES_COLLECTION, activityId);
-  const endTime = Timestamp.now();
-  
+  const activityRef = doc(db, 'activities', activityId);
   await updateDoc(activityRef, {
-    endTime,
-    duration: endTime.seconds - (await getDocs(query(collection(db, ACTIVITIES_COLLECTION), where('id', '==', activityId)))).docs[0].data().startTime.seconds,
-    updatedAt: endTime
+    endTime: new Date(),
   });
 };
 
-export const updateActivity = async (
-  activityId: string,
-  updates: Partial<Activity>
-): Promise<void> => {
-  const activityRef = doc(db, ACTIVITIES_COLLECTION, activityId);
+export const updatePomodoroCount = async (activityId: string, count: number): Promise<void> => {
+  const activityRef = doc(db, 'activities', activityId);
   await updateDoc(activityRef, {
-    ...updates,
-    updatedAt: Timestamp.now()
+    pomodoroCount: count,
   });
 };
 
 export const deleteActivity = async (activityId: string): Promise<void> => {
-  const activityRef = doc(db, ACTIVITIES_COLLECTION, activityId);
+  const activityRef = doc(db, 'activities', activityId);
   await deleteDoc(activityRef);
 };
 
 export const getUserActivities = async (userId: string): Promise<Activity[]> => {
-  const activitiesQuery = query(
-    collection(db, ACTIVITIES_COLLECTION),
-    where('userId', '==', userId),
-    orderBy('startTime', 'desc')
-  );
-
-  const querySnapshot = await getDocs(activitiesQuery);
-  return querySnapshot.docs.map((doc) => ({
-    id: doc.id,
-    ...convertTimestamps(doc.data())
-  })) as Activity[];
+  const activitiesRef = collection(db, 'activities');
+  const q = query(activitiesRef, where('userId', '==', userId));
+  const querySnapshot = await getDocs(q);
+  
+  return querySnapshot.docs.map((doc) => {
+    const data = doc.data();
+    return {
+      id: doc.id,
+      ...data,
+      startTime: data.startTime.toDate(),
+      endTime: data.endTime?.toDate(),
+    } as Activity;
+  });
 };
 
 const convertTimestamps = (data: DocumentData): Partial<Activity> => {

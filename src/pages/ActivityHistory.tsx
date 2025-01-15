@@ -90,6 +90,9 @@ const ActivityHistory = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Duration
                 </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Type
+                </th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
                 </th>
@@ -108,9 +111,17 @@ const ActivityHistory = () => {
                     {format(activity.startTime, 'MMM d, yyyy HH:mm')}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {formatDuration(
-                      activity.startTime,
-                      activity.endTime || null
+                    {formatDuration(activity.startTime, activity.endTime || null)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                    {activity.isPomodoro ? (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        Pomodoro ({activity.pomodoroCount} sessions)
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        Regular
+                      </span>
                     )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
@@ -125,7 +136,7 @@ const ActivityHistory = () => {
               ))}
               {activities.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-6 py-4 text-center text-sm text-gray-500">
+                  <td colSpan={6} className="px-6 py-4 text-center text-sm text-gray-500">
                     No activities found
                   </td>
                 </tr>

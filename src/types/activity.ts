@@ -7,16 +7,13 @@ export interface Activity {
   category: ActivityCategory;
   startTime: Date;
   endTime?: Date;
-  duration?: number; // in seconds
-  createdAt: Date;
-  updatedAt: Date;
+  isPomodoro?: boolean;
+  pomodoroCount?: number;
 }
 
-export interface ActivityGoal {
-  userId: string;
-  category: ActivityCategory;
-  targetDuration: number; // in seconds
-  period: 'daily' | 'weekly';
-  createdAt: Date;
-  updatedAt: Date;
+export interface PomodoroSettings {
+  workDuration: number;  // in minutes
+  shortBreakDuration: number;  // in minutes
+  longBreakDuration: number;  // in minutes
+  longBreakInterval: number;  // number of pomodoros before long break
 } 

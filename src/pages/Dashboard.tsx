@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { createActivity, stopActivity } from '../services/activity';
 import { ActivityCategory } from '../types/activity';
+import Pomodoro from '../components/Pomodoro';
 
 const Dashboard = () => {
   const [title, setTitle] = useState('');
@@ -86,6 +87,9 @@ const Dashboard = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white rounded-lg shadow-lg p-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">
+            Activity Tracker
+          </h2>
           <div className="space-y-6">
             <div className="flex flex-col md:flex-row gap-4">
               <div className="flex-1">
@@ -140,6 +144,8 @@ const Dashboard = () => {
             </button>
           </div>
         </div>
+
+        <Pomodoro />
       </div>
     </div>
   );
