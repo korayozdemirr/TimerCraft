@@ -1,185 +1,218 @@
 import { useEffect, useState } from 'react';
 import {
-  Box,
-  Container,
-  Heading,
-  VStack,
-  HStack,
-  Select,
-  useToast,
-  Grid,
-  GridItem,
-} from '@chakra-ui/react';
-import {
-  PieChart,
-  Pie,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
   Tooltip,
   Legend,
-  Cell,
-  ResponsiveContainer,
-} from 'recharts';
+  ArcElement,
+} from 'chart.js';
+import { Bar, Pie } from 'react-chartjs-2';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 import { useAuth } from '../context/AuthContext';
 import { Activity, ActivityCategory } from '../types/activity';
 import { getUserActivities } from '../services/activity';
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  ArcElement
+);
+
+const COLORS = [
+  'rgba(54, 162, 235, 0.8)',
+  'rgba(75, 192, 192, 0.8)',
+  'rgba(255, 206, 86, 0.8)',
+  'rgba(255, 99, 132, 0.8)',
+  'rgba(153, 102, 255, 0.8)',
+];
 
 const Analytics = () => {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [timeRange, setTimeRange] = useState<'week' | 'month'>('week');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const { currentUser } = useAuth();
-  const toast = useToast();
 
   useEffect(() => {
-    loadActivities();
-  }, [currentUser, timeRange]);
-
-  const loadActivities = async () => {
-    try {
-      if (!currentUser) return;
-      const userActivities = await getUserActivities(currentUser.uid);
-      
-      const rangeStart = timeRange === 'week' ? startOfWeek(new Date()) : startOfMonth(new Date());
-      const rangeEnd = timeRange === 'week' ? endOfWeek(new Date()) : endOfMonth(new Date());
-      
-      const filteredActivities = userActivities.filter(
-        (activity) =>
-          activity.startTime >= rangeStart &&
-          (activity.endTime ? activity.endTime <= rangeEnd : true)
-      );
-      
-      setActivities(filteredActivities);
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to load activities',
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      });
-    }
-  };
-
-  const getCategoryData = () => {
-    const categoryDurations: Record<ActivityCategory, number> = {
-      Work: 0,
-      Exercise: 0,
-      Leisure: 0,
-      Study: 0,
-      Personal: 0,
+    const fetchActivities = async () => {
+      try {
+        if (currentUser) {
+          const now = new Date();
+          const start = timeRange === 'week' ? startOfWeek(now) : startOfMonth(now);
+          const end = timeRange === 'week' ? endOfWeek(now) : endOfMonth(now);
+          const fetchedActivities = await getUserActivities(currentUser.uid);
+          const filteredActivities = fetchedActivities.filter(
+            (activity) =>
+              activity.startTime >= start &&
+              (activity.endTime ? activity.endTime <= end : true)
+          );
+          setActivities(filteredActivities);
+        }
+      } catch (error) {
+        setError('Failed to fetch activities');
+      } finally {
+        setLoading(false);
+      }
     };
 
+    fetchActivities();
+  }, [currentUser, timeRange]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+      </div>
+    );
+  }
+
+  const getCategoryData = () => {
+    const categoryDurations: { [key in ActivityCategory]?: number } = {};
+    
     activities.forEach((activity) => {
-      if (activity.duration) {
-        categoryDurations[activity.category] += activity.duration;
+      if (activity.endTime) {
+        const duration = Math.floor(
+          (activity.endTime.getTime() - activity.startTime.getTime()) / (1000 * 60 * 60)
+        );
+        categoryDurations[activity.category] = (categoryDurations[activity.category] || 0) + duration;
       }
     });
 
-    return Object.entries(categoryDurations).map(([name, value]) => ({
-      name,
-      value: Math.round(value / 3600), // Convert seconds to hours
-    }));
+    const labels = Object.keys(categoryDurations);
+    const data = Object.values(categoryDurations);
+
+    return {
+      labels,
+      datasets: [
+        {
+          data,
+          backgroundColor: COLORS,
+          borderColor: COLORS.map(color => color.replace('0.8', '1')),
+          borderWidth: 1,
+        },
+      ],
+    };
   };
 
   const getDailyData = () => {
-    const dailyDurations: Record<string, Record<ActivityCategory, number>> = {};
-
+    const dailyData: { [date: string]: { [key in ActivityCategory]?: number } } = {};
+    
     activities.forEach((activity) => {
-      if (activity.duration) {
+      if (activity.endTime) {
         const date = format(activity.startTime, 'MM/dd');
-        if (!dailyDurations[date]) {
-          dailyDurations[date] = {
-            Work: 0,
-            Exercise: 0,
-            Leisure: 0,
-            Study: 0,
-            Personal: 0,
-          };
+        const duration = Math.floor(
+          (activity.endTime.getTime() - activity.startTime.getTime()) / (1000 * 60 * 60)
+        );
+        
+        if (!dailyData[date]) {
+          dailyData[date] = {};
         }
-        dailyDurations[date][activity.category] += activity.duration / 3600; // Convert to hours
+        
+        dailyData[date][activity.category] = (dailyData[date][activity.category] || 0) + duration;
       }
     });
 
-    return Object.entries(dailyDurations).map(([date, categories]) => ({
-      date,
-      ...categories,
-    }));
+    const dates = Object.keys(dailyData);
+    const categories = Array.from(
+      new Set(
+        activities.map((activity) => activity.category)
+      )
+    );
+
+    return {
+      labels: dates,
+      datasets: categories.map((category, index) => ({
+        label: category,
+        data: dates.map((date) => dailyData[date][category] || 0),
+        backgroundColor: COLORS[index % COLORS.length],
+        borderColor: COLORS[index % COLORS.length].replace('0.8', '1'),
+        borderWidth: 1,
+        stack: 'stack',
+      })),
+    };
+  };
+
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'bottom' as const,
+      },
+    },
+    scales: {
+      x: {
+        stacked: true,
+      },
+      y: {
+        stacked: true,
+        title: {
+          display: true,
+          text: 'Hours',
+        },
+      },
+    },
+  };
+
+  const pieOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'bottom' as const,
+      },
+    },
   };
 
   return (
-    <Container maxW="container.xl" py={10}>
-      <VStack spacing={8} align="stretch">
-        <HStack justify="space-between">
-          <Heading size="lg">Analytics</Heading>
-          <Select
+    <div className="space-y-8">
+      <div className="sm:flex sm:items-center sm:justify-between">
+        <h1 className="text-2xl font-bold text-gray-900">Analytics</h1>
+        <div className="mt-4 sm:mt-0">
+          <select
             value={timeRange}
             onChange={(e) => setTimeRange(e.target.value as 'week' | 'month')}
-            width="200px"
+            className="input"
           >
             <option value="week">This Week</option>
             <option value="month">This Month</option>
-          </Select>
-        </HStack>
+          </select>
+        </div>
+      </div>
 
-        <Grid templateColumns="repeat(2, 1fr)" gap={8}>
-          <GridItem colSpan={[2, 1]}>
-            <Box p={6} borderWidth={1} borderRadius={8} boxShadow="lg" height="400px">
-              <Heading size="md" mb={4}>
-                Time Distribution by Category
-              </Heading>
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={getCategoryData()}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={100}
-                    label
-                  >
-                    {getCategoryData().map((entry, index) => (
-                      <Cell key={entry.name} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
-            </Box>
-          </GridItem>
+      {error && (
+        <div className="rounded-md bg-red-50 p-4">
+          <div className="text-sm text-red-700">{error}</div>
+        </div>
+      )}
 
-          <GridItem colSpan={[2, 1]}>
-            <Box p={6} borderWidth={1} borderRadius={8} boxShadow="lg" height="400px">
-              <Heading size="md" mb={4}>
-                Daily Activity Breakdown
-              </Heading>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={getDailyData()}>
-                  <XAxis dataKey="date" />
-                  <YAxis label={{ value: 'Hours', angle: -90, position: 'insideLeft' }} />
-                  <Tooltip />
-                  <Legend />
-                  {Object.keys(getCategoryData()[0] || {}).map((category, index) => (
-                    <Bar
-                      key={category}
-                      dataKey={category}
-                      stackId="a"
-                      fill={COLORS[index % COLORS.length]}
-                    />
-                  ))}
-                </BarChart>
-              </ResponsiveContainer>
-            </Box>
-          </GridItem>
-        </Grid>
-      </VStack>
-    </Container>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-white rounded-lg shadow-lg p-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">
+            Time Distribution by Category
+          </h2>
+          <div className="h-[400px]">
+            <Pie data={getCategoryData()} options={pieOptions} />
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow-lg p-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">
+            Daily Activity Breakdown
+          </h2>
+          <div className="h-[400px]">
+            <Bar data={getDailyData()} options={options} />
+          </div>
+        </div>
+      </div>
+    </div>
   );
 };
 
